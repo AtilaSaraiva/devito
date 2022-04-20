@@ -13,6 +13,9 @@ def demo_model(preset, **kwargs):
     demonstration and testing purposes. The particular presets are ::
 
     * `constant-isotropic` : Constant velocity (1.5 km/sec) isotropic model
+    * `constant-vti` : Constant anisotropic model. Velocity is 1.5 km/sec and
+                      Thomsen parameters are epsilon=.3, delta=.2. 2d/3d is 
+                      defined from the input shape
     * `constant-tti` : Constant anisotropic model. Velocity is 1.5 km/sec and
                       Thomsen parameters are epsilon=.3, delta=.2, theta = .7rad
                       and phi=.35rad for 3D. 2d/3d is defined from the input shape
@@ -24,6 +27,11 @@ def demo_model(preset, **kwargs):
                     Vs is set to .5 vp and 0 in the top layer.
     * 'layers-viscoelastic': Simple two layers viscoelastic model.
     * 'layers-tti': Simple n-layered model with velocities ranging from 1.5 km/s
+                    to 3.5 km/s in the top and bottom layer respectively.
+                    Thomsen parameters in the top layer are 0 and in the lower layers
+                    are scaled versions of vp.
+                    2d/3d is defined from the input shape
+    * 'layers-vti': Simple n-layered model with velocities ranging from 1.5 km/s
                     to 3.5 km/s in the top and bottom layer respectively.
                     Thomsen parameters in the top layer are 0 and in the lower layers
                     are scaled versions of vp.
@@ -90,21 +98,28 @@ def demo_model(preset, **kwargs):
                             dtype=dtype, origin=origin, shape=shape,
                             spacing=spacing, **kwargs)
 
-    elif preset.lower() in ['constant-tti']:
+    elif preset.lower() in ['constant-vti', 'constant-tti']:
         # A constant single-layer model in a 2D or 3D domain
         # with velocity 1.5 km/s.
         v = np.empty(shape, dtype=dtype)
         v[:] = 1.5
         epsilon = .3*np.ones(shape, dtype=dtype)
         delta = .2*np.ones(shape, dtype=dtype)
-        theta = .7*np.ones(shape, dtype=dtype)
-        phi = None
-        if len(shape) > 2:
-            phi = .35*np.ones(shape, dtype=dtype)
 
-        return SeismicModel(space_order=space_order, vp=v, origin=origin, shape=shape,
-                            dtype=dtype, spacing=spacing, nbl=nbl, epsilon=epsilon,
-                            delta=delta, theta=theta, phi=phi, bcs="damp", **kwargs)
+        if preset.lower() not in ['constant-vti']:
+            theta = .7*np.ones(shape, dtype=dtype)
+            phi = None
+            if len(shape) > 2:
+                phi = .35*np.ones(shape, dtype=dtype)
+
+            return SeismicModel(space_order=space_order, vp=v, origin=origin,
+                                shape=shape, dtype=dtype, spacing=spacing, nbl=nbl,
+                                epsilon=epsilon, delta=delta, theta=theta, phi=phi,
+                                bcs="damp", **kwargs)
+        else:
+            return SeismicModel(space_order=space_order, vp=v, origin=origin,
+                                shape=shape, dtype=dtype, spacing=spacing, nbl=nbl,
+                                epsilon=epsilon, delta=delta, bcs="damp", **kwargs)
 
     elif preset.lower() in ['layers-isotropic']:
         # A n-layers model in a 2D or 3D domain with two different
@@ -194,7 +209,7 @@ def demo_model(preset, **kwargs):
                             shape=shape, dtype=dtype, spacing=spacing,
                             nbl=nbl, **kwargs)
 
-    elif preset.lower() in ['layers-tti', 'layers-tti-noazimuth']:
+    elif preset.lower() in ['layers-vti', 'layers-tti', 'layers-tti-noazimuth']:
         # A n-layers model in a 2D or 3D domain with two different
         # velocities split across the height dimension:
         # By default, the top part of the domain has 1.5 km/s,
@@ -211,20 +226,29 @@ def demo_model(preset, **kwargs):
 
         epsilon = .3*(v - 1.5)
         delta = .2*(v - 1.5)
-        theta = .5*(v - 1.5)
-        phi = None
-        if len(shape) > 2 and preset.lower() not in ['layers-tti-noazimuth']:
-            phi = .25*(v - 1.5)
 
-        model = SeismicModel(space_order=space_order, vp=v, origin=origin, shape=shape,
-                             dtype=dtype, spacing=spacing, nbl=nbl, epsilon=epsilon,
-                             delta=delta, theta=theta, phi=phi, bcs="damp", **kwargs)
-
-        if kwargs.get('smooth', False):
+        if preset.lower() not in ['layers-vti']:
+            theta = .5*(v - 1.5)
+            phi = None
             if len(shape) > 2 and preset.lower() not in ['layers-tti-noazimuth']:
-                model.smooth(('epsilon', 'delta', 'theta', 'phi'))
-            else:
-                model.smooth(('epsilon', 'delta', 'theta'))
+                phi = .25*(v - 1.5)
+
+            model = SeismicModel(space_order=space_order, vp=v, origin=origin,
+                                 shape=shape, dtype=dtype, spacing=spacing, nbl=nbl,
+                                 epsilon=epsilon, delta=delta, theta=theta, phi=phi,
+                                 bcs="damp", **kwargs)
+
+            if kwargs.get('smooth', False):
+                if len(shape) > 2 and preset.lower() not in ['layers-tti-noazimuth']:
+                    model.smooth(('epsilon', 'delta', 'theta', 'phi'))
+                else:
+                    model.smooth(('epsilon', 'delta', 'theta'))
+        else:
+            model = SeismicModel(space_order=space_order, vp=v, origin=origin,
+                                 shape=shape, dtype=dtype, spacing=spacing, nbl=nbl,
+                                 epsilon=epsilon, delta=delta, bcs="damp", **kwargs)
+            if kwargs.get('smooth', False):
+                model.smooth(('epsilon', 'delta'))
 
         return model
 
