@@ -25,6 +25,7 @@ def FD_kernel(model, u, space_order):
     delta = model.delta
     epsilon = model.epsilon
     m = model.m
+
     # Use trigonometric functions from Devito
     costheta  = cos(theta)
     sintheta  = sin(theta)
@@ -59,9 +60,9 @@ def FD_kernel(model, u, space_order):
         cos2phi = cos(2*phi)
         sin2phi = sin(2*phi)
 
-        s_xy = ( u.dxc**2 + u.dyc**2 ) / (u.dzc**2)
-        s_xz = ( u.dxc**2 + u.dzc**2 ) / (u.dyc**2)
-        s_yz = ( u.dyc**2 + u.dzc**2 ) / (u.dxc**2)
+        s_xy = ( u.dxc**2 + u.dyc**2 ) / (u.dzc**2 + eps)
+        s_xz = ( u.dxc**2 + u.dzc**2 ) / (u.dyc**2 + eps)
+        s_yz = ( u.dyc**2 + u.dzc**2 ) / (u.dxc**2 + eps)
 
         st_xy = 1 / ( 1 + s_xy)
         st_xz = 1 / ( 1 + s_xz)
@@ -121,7 +122,7 @@ def FD_kernel(model, u, space_order):
 
         H = t1*u.dx2 + t2*u.dy2 + t3*u.dz2 + t4*u.dx.dy + t5*u.dx.dz + t6*u.dy.dz
 
-        pde = m*u.dt2 + H + damp * u.dt
+        pde = m*u.dt2 - H + damp * u.dt
 
     # Stencil
     stencil = Eq(u.forward, solve(pde, u.forward))

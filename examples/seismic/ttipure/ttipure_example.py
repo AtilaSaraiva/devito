@@ -3,6 +3,7 @@ import pytest
 import argparse
 
 from devito import Function, norm, info
+from matplotlib import pyplot as plt
 
 from examples.seismic import demo_model, setup_geometry, seismic_args
 from examples.seismic.ttipure import PureTtiWaveSolver
@@ -48,7 +49,8 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
     # Define receiver geometry (spread across x, just below surface)
     rec, u, summary = solver.forward(save=save, autotune=autotune)
 
-    print(u.data[1,:,:,20])
+    plt.imshow(u.data[100,:,25,:])
+    plt.show()
     return summary.gflopss, summary.oi, summary.timings, [rec, u]
 
 
