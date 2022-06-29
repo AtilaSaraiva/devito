@@ -3,7 +3,7 @@ from devito import Eq, Operator, Function, TimeFunction, solve
 from examples.seismic import PointSource, Receiver
 
 
-def FD_kernel(model, u, space_order):
+def FD_kernel(model, u, space_order, forward=True):
     """
     VTI finite difference kernel. The equation solved is:
 
@@ -44,6 +44,9 @@ def FD_kernel(model, u, space_order):
     delta, epsilon = model.delta, model.epsilon
     eps = np.finfo(model.dtype).eps
 
+    unext = u.forward if forward else u.backward
+    udt = u.dt if forward else u.dt.T
+
     if len(model.shape) == 2:
         dur_p2 = u.dxc**2
         dur_p4 = u.dxc**4
@@ -63,12 +66,22 @@ def FD_kernel(model, u, space_order):
     denominator = (duz_p4 + (2. + 2.*epsilon)*dur_p2*duz_p2 +
                    (1. + 2*epsilon)*dur_p4 + eps)
     sn = numerator/denominator
-    term1 = (1. + 2.*epsilon + sn)*ddur
-    term2 = (1. + sn)*dduz
-    pde = m*u.dt2 - (term1 + term2) + damp * u.dt
+
+    if forward:
+        term1 = (1. + 2.*epsilon + sn)*ddur
+        term2 = (1. + sn)*dduz
+    else:
+    	if len(model.shape) == 2:
+        	term1 = (u*(1. + 2.*epsilon + sn)).dx2
+        	term2 = (u*(1. + sn)).dy2
+    	else:
+        	term1 = (u*(1. + 2.*epsilon + sn)).dx2 + (u*(1. + 2.*epsilon + sn)).dy2
+        	term2 = (u*(1. + sn)).dz2
+
+    pde = m*u.dt2 - (term1 + term2) + damp * udt
 
     # Stencil
-    stencil = Eq(u.forward, solve(pde, u.forward))
+    stencil = Eq(unext, solve(pde, unext))
 
     return stencil
 
@@ -115,3 +128,44 @@ def ForwardOperator(model, geometry, space_order=4,
 
     # Substitute spacing terms to reduce flops
     return Operator(stencil, subs=model.spacing_map, name='ForwardVTI', **kwargs)
+
+
+def AdjointOperator(model, geometry, space_order=4,
+                    **kwargs):
+    """
+    Construct an adjoint modelling operator in an vti media.
+    Parameters
+    ----------
+    model : Model
+        Object containing the physical parameters.
+    geometry : AcquisitionGeometry
+        Geometry object that contains the source (SparseTimeFunction) and
+        receivers (SparseTimeFunction) and their position.
+    space_order : int, optional
+        Space discretization order.
+    """
+
+    dt = model.grid.time_dim.spacing
+    m = model.m
+    time_order = 2
+
+    # Create symbols for forward wavefield, source and receivers
+    p = TimeFunction(name='p', grid=model.grid,
+                     time_order=time_order, space_order=space_order)
+    srca = PointSource(name='srca', grid=model.grid, time_range=geometry.time_axis,
+                       npoint=geometry.nsrc)
+    rec = Receiver(name='rec', grid=model.grid, time_range=geometry.time_axis,
+                   npoint=geometry.nrec)
+
+    # FD kernels of the PDE
+    stencil = FD_kernel(model, p, space_order, forward=False)
+
+    # Construct expression to inject receiver values
+    expr = rec * dt**2 / m
+    stencil += rec.inject(field=p.backward, expr=expr)
+
+    # Create interpolation expression for the adjoint-source
+    stencil += srca.interpolate(expr=p)
+
+    # Substitute spacing terms to reduce flops
+    return Operator(stencil, subs=model.spacing_map, name='AdjointVTI', **kwargs)

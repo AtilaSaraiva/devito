@@ -1,7 +1,7 @@
 # coding: utf-8
 from devito import Function, TimeFunction, warning
 from devito.tools import memoized_meth
-from examples.seismic.vtipure.operators import ForwardOperator
+from examples.seismic.vtipure.operators import ForwardOperator, AdjointOperator
 
 
 class PureVtiWaveSolver(object):
@@ -54,6 +54,13 @@ class PureVtiWaveSolver(object):
                                space_order=self.space_order,
                                **self._kwargs)
 
+    @memoized_meth
+    def op_adj(self):
+        """Cached operator for adjoint runs"""
+        return AdjointOperator(self.model, save=None, geometry=self.geometry,
+                               space_order=self.space_order,
+                               **self._kwargs)
+
     def forward(self, src=None, rec=None, u=None, model=None,
                 save=False, **kwargs):
         """
@@ -98,8 +105,52 @@ class PureVtiWaveSolver(object):
         model = model or self.model
         # Pick vp and Thomsen parameters from model unless explicitly provided
         kwargs.update(model.physical_params(**kwargs))
-        
+
         # Execute operator and return wavefield and receiver data
         summary = self.op_fwd(save).apply(src=src, rec=rec, u=u,
                                           dt=kwargs.pop('dt', self.dt), **kwargs)
         return rec, u, summary
+
+    def adjoint(self, rec, srca=None, p=None, model=None,
+                save=None, **kwargs):
+        """
+        Adjoint modelling function that creates the necessary
+        data objects for running an adjoint modelling operator.
+        Parameters
+        ----------
+        geometry : AcquisitionGeometry
+            Geometry object that contains the source (SparseTimeFunction) and
+            receivers (SparseTimeFunction) and their position.
+        p : TimeFunction, optional
+            The computed wavefield first component.
+        model : Model, optional
+            Object containing the physical parameters.
+        vp : Function or float, optional
+            The time-constant velocity.
+        epsilon : Function or float, optional
+            The time-constant first Thomsen parameter.
+        delta : Function or float, optional
+            The time-constant second Thomsen parameter.
+        Returns
+        -------
+        Adjoint source, wavefield and performance summary.
+        """
+        time_order = 2
+
+        # Source term is read-only, so re-use the default
+        srca = srca or self.geometry.new_src(name='srca', src_type=None)
+
+        # Create the wavefield if not provided
+        if p is None:
+            p = TimeFunction(name='p', grid=self.model.grid,
+                             time_order=time_order,
+                             space_order=self.space_order)
+
+        model = model or self.model
+        # Pick vp and Thomsen parameters from model unless explicitly provided
+        kwargs.update(model.physical_params(**kwargs))
+        # Execute operator and return wavefield and receiver data
+        summary = self.op_adj().apply(srca=srca, rec=rec, p=p,
+                                      dt=kwargs.pop('dt', self.dt),
+                                      **kwargs)
+        return srca, p, summary
