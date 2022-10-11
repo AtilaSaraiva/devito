@@ -41,6 +41,12 @@ def run(shape=(50, 50, 50), spacing=(20.0, 20.0, 20.0), tn=250.0,
              + "variable is disregarded." + "\n")
         checkpointing = not checkpointing
 
+    # fw_op = solver.op_fwd()
+    # adj_op = solver.op_adj()
+
+    # operatorInjector(fw_op, files ['forward'])
+    # operatorInjector(adj_op, files ['adjoint'])
+
     info("Applying Forward")
     # Whether or not we save the whole time history. We only need the full wavefield
     # with 'save=True' if we compute the gradient without checkpointing, if we use

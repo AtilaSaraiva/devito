@@ -6,12 +6,14 @@ from devito.logger import info
 from examples.seismic import demo_model, Receiver
 from examples.seismic.acoustic import acoustic_setup
 from examples.seismic.tti import tti_setup
+from examples.seismic.vtipure import vti_setup
 from examples.seismic.viscoacoustic import viscoacoustic_setup
 
 presets = {
     'constant': {'preset': 'constant-isotropic'},
     'layers': {'preset': 'layers-isotropic', 'nlayers': 2},
     'layers-tti': {'preset': 'layers-tti', 'nlayers': 2},
+    'layers-vti': {'preset': 'layers-vti', 'nlayers': 2},
     'layers-viscoacoustic': {'preset': 'layers-viscoacoustic', 'nlayers': 2},
 }
 
@@ -42,6 +44,7 @@ class TestAdjoint(object):
         ('layers-tti', (30, 35), 'centered', 4, 2, tti_setup),
         ('layers-tti', (30, 35), 'staggered', 8, 1, tti_setup),
         ('layers-tti', (30, 35), 'staggered', 4, 1, tti_setup),
+        ('layers-vti', (30, 35), 'staggered', 4, 1, vti_setup),
         # 3D TTI tests with varying space orders
         ('layers-tti', (30, 35, 40), 'centered', 8, 2, tti_setup),
         ('layers-tti', (30, 35, 40), 'centered', 4, 2, tti_setup),

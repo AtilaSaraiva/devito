@@ -1,8 +1,32 @@
 # coding: utf-8
-from devito import Function, TimeFunction, warning
+from devito import Function, TimeFunction, warning, configuration
 from devito.tools import memoized_meth
 from examples.seismic.vtipure.operators import ForwardOperator, AdjointOperator
+from shutil import copyfile
 
+files = {
+    'forward' : '/home/atila/Files/Codes/repos/devito-vti/examples/seismic/vtipure/forward.c',
+    'adjoint' : '/home/atila/Files/Codes/repos/devito-vti/examples/seismic/vtipure/adjoint.c',
+    }
+
+def operatorInjector(op, payload):
+
+    configuration['jit-backdoor'] = True
+    configuration.add('payload', payload)
+
+    # Force compilation *and* loading upon the next `op.apply`
+
+    op._lib = None
+    op._cfunction = None
+
+    if op._soname:
+        del op._soname
+
+    cfile = "%s.c" % str(op._compiler.get_jit_dir().joinpath(op._soname))
+
+    copyfile(payload, cfile)
+
+    return
 
 class PureVtiWaveSolver(object):
     """
@@ -106,9 +130,16 @@ class PureVtiWaveSolver(object):
         # Pick vp and Thomsen parameters from model unless explicitly provided
         kwargs.update(model.physical_params(**kwargs))
 
+
+        fw_op = self.op_fwd(save)
+        operatorInjector(fw_op, files['forward'])
+
         # Execute operator and return wavefield and receiver data
-        summary = self.op_fwd(save).apply(src=src, rec=rec, u=u,
+        summary = fw_op.apply(src=src, rec=rec, u=u,
                                           dt=kwargs.pop('dt', self.dt), **kwargs)
+
+        # summary = self.op_fwd(save).apply(src=src, rec=rec, u=u,
+                                          # dt=kwargs.pop('dt', self.dt), **kwargs)
         return rec, u, summary
 
     def adjoint(self, rec, srca=None, p=None, model=None,
@@ -149,8 +180,16 @@ class PureVtiWaveSolver(object):
         model = model or self.model
         # Pick vp and Thomsen parameters from model unless explicitly provided
         kwargs.update(model.physical_params(**kwargs))
+
+        adj_op = self.op_adj()
+        operatorInjector(adj_op, files['adjoint'])
+
         # Execute operator and return wavefield and receiver data
-        summary = self.op_adj().apply(srca=srca, rec=rec, p=p,
+        summary = adj_op.apply(srca=srca, rec=rec, p=p,
                                       dt=kwargs.pop('dt', self.dt),
                                       **kwargs)
+
+        # summary = self.op_adj().apply(srca=srca, rec=rec, p=p,
+                                      # dt=kwargs.pop('dt', self.dt),
+                                      # **kwargs)
         return srca, p, summary
